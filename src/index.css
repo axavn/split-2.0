@@ -572,6 +572,33 @@ a {
   white-space: nowrap;
 }
 
+/* 2.2: delete a bill you paid, straight from its row. */
+.txn__delete {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-soft);
+  width: 26px;
+  height: 26px;
+  line-height: 1;
+  font-size: 16px;
+  flex-shrink: 0;
+  transition: border-color 0.1s, color 0.1s;
+}
+
+.txn__delete:hover {
+  border-color: var(--negative);
+  color: var(--negative);
+}
+
+.detail__error {
+  margin: 16px 0 0;
+}
+
+.detail__remove {
+  margin-top: 20px;
+}
+
 /* Add pages (§7) --------------------------------------------------------------- */
 
 .add-choice {

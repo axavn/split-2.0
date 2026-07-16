@@ -14,6 +14,11 @@ export type LedgerEntry = {
   createdAt: string;
   otherUserId: string;
   directionCents: number;
+  // Whether the CURRENT user paid this bill (vs. the other person paying it).
+  // Only the payer may delete a bill — kept as an explicit flag rather than
+  // inferred from directionCents' sign, because a $0 share (a valid split
+  // result) makes the sign ambiguous.
+  paidByMe: boolean;
 };
 
 // A connection as seen from the current user's side (journal item 4: these
@@ -125,6 +130,7 @@ export async function fetchLedger(userId: string): Promise<LedgerEntry[]> {
         createdAt: bill.created_at,
         otherUserId: share.user_id,
         directionCents: share.amount_owed_cents,
+        paidByMe: true,
       });
     }
   }
@@ -136,6 +142,7 @@ export async function fetchLedger(userId: string): Promise<LedgerEntry[]> {
       createdAt: share.bill.created_at,
       otherUserId: share.bill.created_by,
       directionCents: -share.amount_owed_cents,
+      paidByMe: false,
     });
   }
 
@@ -249,5 +256,12 @@ export async function createBill(bill: NewBill): Promise<string | null> {
     p_share_user_ids: participantIds,
     p_share_amounts_cents: amounts,
   });
+  return error ? error.message : null;
+}
+
+// Hard delete, payer only (enforced by RLS — see "payer deletes their own
+// bill" in schema.sql). bill_shares cascades automatically via its FK.
+export async function deleteBill(billId: string): Promise<string | null> {
+  const { error } = await requireSupabase().from('bills').delete().eq('id', billId);
   return error ? error.message : null;
 }

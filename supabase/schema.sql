@@ -165,6 +165,27 @@ revoke all on function public.is_bill_payer(uuid, uuid) from public, anon;
 grant execute on function public.is_bill_payer(uuid, uuid) to authenticated;
 revoke all on function public.is_bill_participant(uuid, uuid) from public, anon;
 grant execute on function public.is_bill_participant(uuid, uuid) to authenticated;
+
+-- Used by create_bill (2.2) to reject bills against people who aren't your
+-- accepted connections. Without this, create_bill's only check was "you're
+-- the payer" — nothing stopped a client from calling the RPC with a
+-- stranger's user id and saddling them with a debt they never agreed to.
+create function public.is_accepted_connection(p_user_a uuid, p_user_b uuid)
+returns boolean
+language sql
+security definer set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.connections c
+    where c.status = 'accepted'
+      and ((c.user_a = p_user_a and c.user_b = p_user_b)
+        or (c.user_a = p_user_b and c.user_b = p_user_a))
+  );
+$$;
+
+revoke all on function public.is_accepted_connection(uuid, uuid) from public, anon;
+grant execute on function public.is_accepted_connection(uuid, uuid) to authenticated;
 alter table public.profiles enable row level security;
 alter table public.connections enable row level security;
 alter table public.bills enable row level security;
@@ -251,6 +272,20 @@ create policy "payer inserts shares for their bill"
   to authenticated
   with check (public.is_bill_payer(bill_id, (select auth.uid())));
 
+-- 2.2: bills are hard-deletable, payer only (mirrors the insert policy).
+-- bill_shares has "on delete cascade" on bill_id, so deleting a bill removes
+-- its shares automatically; the delete policy below is defense in depth in
+-- case a share is ever deleted directly.
+create policy "payer deletes their own bill"
+  on public.bills for delete
+  to authenticated
+  using (created_by = (select auth.uid()));
+
+create policy "payer deletes shares on their bill"
+  on public.bill_shares for delete
+  to authenticated
+  using (public.is_bill_payer(bill_id, (select auth.uid())));
+
 -- ============================================================================
 -- create_bill: insert a bill and all of its shares in ONE transaction.
 --
@@ -279,6 +314,15 @@ begin
   if array_length(p_share_user_ids, 1) is distinct from array_length(p_share_amounts_cents, 1) then
     raise exception 'share user ids and amounts must have the same length';
   end if;
+
+  -- 2.2: reject any participant who isn't an accepted connection of the
+  -- caller. RLS on bill_shares only checked "you're the bill's payer" — it
+  -- never checked who the debt was against, so this was the only real gap.
+  for i in 1 .. coalesce(array_length(p_share_user_ids, 1), 0) loop
+    if not public.is_accepted_connection(auth.uid(), p_share_user_ids[i]) then
+      raise exception 'all bill participants must be accepted connections';
+    end if;
+  end loop;
 
   insert into public.bills (created_by, description, total_amount_cents, split_type, include_self)
   values (auth.uid(), p_description, p_total_cents, p_split_type, p_include_self)

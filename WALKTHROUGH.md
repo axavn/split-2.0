@@ -345,7 +345,89 @@ Good exercises: change `--radius` to 12px and see the feel shift; swap
 Dongle for another display font (one line in `index.html`, one token here);
 make a light theme by inverting the five neutral tokens.
 
-## 10. What's deliberately not here
+## 10. The 2.2 release — closing a trust gap
+
+A code-review pass (not user testing this time) turned up one real security
+issue and a few missing pieces. What each one teaches:
+
+### 10.1 `create_bill` trusted the client too much
+
+RLS on `bill_shares` only checked "you're the payer" — it never checked *who*
+you were creating a debt against. `create_bill` is a callable RPC, so anyone
+with a valid session and another user's UUID could call it directly (browser
+console, a raw REST call with their own JWT) and create a `bill_shares` row
+against a total stranger. That's the general RLS lesson from §3.6 again, one
+layer up: a policy can be individually correct and the *system* still leaks,
+because the missing check wasn't "who am I" but "who is this debt against."
+
+The fix is `is_accepted_connection()`, a `security definer` helper in the
+same family as `is_bill_payer`/`is_bill_participant`, and a loop inside
+`create_bill` that raises if any participant fails that check. It runs
+*before* the bill is inserted, so a rejected call leaves nothing behind.
+
+### 10.2 Bills are now hard-deletable — payer only, no edit
+
+There was no way to undo a mistake — wrong amount, wrong people, wrong split
+— short of living with a wrong balance forever. The fix is deliberately the
+simplest one that could work: a `delete` RLS policy restricted to
+`created_by = auth.uid()`, a `deleteBill()` call, and a `×` button on each
+transaction row you paid (gated on the new `LedgerEntry.paidByMe` flag, not
+the sign of `directionCents` — a $0 share is a valid split result, so the
+sign alone can't distinguish "you paid" from "they paid"). No edit form: for
+two-person trust software, "delete and re-add" is one confirm dialog instead
+of a second form that has to recompute shares. `bill_shares` cleans itself up
+via its existing `on delete cascade` FK; the matching delete policy on
+`bill_shares` is defense in depth, not load-bearing.
+
+### 10.3 Removing a connection now requires a zero balance
+
+There was no "unfriend" feature at all before 2.2 — `removeConnection` was
+only wired to declining a still-*pending* request, which can never carry a
+balance (bills require an accepted connection). Building the feature raised
+the obvious question: what happens to the debt if you remove someone you've
+actually split bills with? `fetchLedger` doesn't filter by connection status,
+so the naive answer is "nothing — the bill_shares rows sit there, invisible,
+until you re-add them," which is a surprising way to lose track of money you
+owe or are owed.
+
+The fix: `BalanceDetailPage` computes `netCents` for the page anyway (it's
+already showing the balance pill), so "Remove connection" reuses that number
+as a guard — nonzero balance shows an error explaining the block instead of
+calling `removeConnection`. It's a client-side check, not an RLS policy,
+which is the right call here: unlike §10.1 (a stranger writing debt onto you
+without consent), the failure mode being guarded against is *your own*
+accidental data hiding, not another party attacking you — nothing is lost
+even if it were bypassed, since the underlying bills survive and reappear the
+moment the connection is re-added.
+
+### 10.4 Home Page balance direction was color-only
+
+The 2.1 redesign (§9.6) deliberately dropped the "owe"/"collect" words from
+the Home Page and left just a big colored number — but that made the
+direction color-only on that one screen, unlike Balance Detail Page (which
+has both a text line and a signed `+`/`−` amount on every transaction). A
+colorblind user had no secondary cue there. The fix is the smallest one that
+doesn't reintroduce clutter: a leading `+`/`−` sign, borrowed directly from
+the convention `BalanceDetailPage` already uses, instead of new copy or a
+different color pair.
+
+### 10.5 Known, deliberately deferred
+
+Two things came up that aren't worth fixing yet, written down so they're a
+tracked decision instead of a forgotten one:
+
+- **`fetchLedger`/`fetchConnections` fetch everything, every load.** The
+  Home Page's "infinite scroll" (§6, `useInfiniteList`) paginates an
+  already-fully-loaded in-memory array — the query itself has no
+  `.range()`/`.limit()`. Fine at this scale (see §5.1); if a single user's
+  `bills` ever crosses roughly 500 rows, move `fetchLedger` to a paginated
+  Postgres view/RPC before page loads get noticeably slow.
+- **Username search leaks existence.** `sendRequest`'s error message tells
+  you whether a username is registered, with no rate limiting. Low stakes
+  (usernames aren't secret, RLS still protects real data) and not worth
+  the UX cost of a generic error message for a two-person trust app.
+
+## 11. What's deliberately not here
 
 - **Receipt OCR (§7.2)** — needs a paid parsing API (Veryfi/Taggun). The
   schema, `bills.source` flag, and the Add Bill page are shaped so the scan

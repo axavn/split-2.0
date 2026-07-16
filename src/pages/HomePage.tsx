@@ -161,7 +161,10 @@ export function HomePage() {
               <span className="person-button__username">@{person.username}</span>
             </span>
             {/* Journal item 6: no "owe"/"collect" words — just a big number,
-                green when they owe you, red when you owe them. */}
+                green when they owe you, red when you owe them. 2.2: a leading
+                +/- sign too, so the direction isn't color-only (colorblind
+                users had no cue on this screen — Balance Detail already had
+                both a text line and a signed amount). */}
             <span
               className={`person-button__balance ${
                 netCents > 0
@@ -170,6 +173,7 @@ export function HomePage() {
                     ? 'amount--negative'
                     : 'amount--neutral'
               }`}>
+              {netCents !== 0 && (netCents > 0 ? '+' : '−')}
               {formatCents(Math.abs(netCents))}
             </span>
           </button>
