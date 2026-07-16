@@ -17,7 +17,20 @@ documents why every layer is built the way it is.
 ## Ground rules
 
 - **Money is integer cents everywhere.** Format to dollars only at render
-  (`src/lib/money.ts`). Never use floats for amounts.
+  (`src/lib/money.ts`). Never use floats for amounts — user input is parsed
+  with `parseAmountToCents` (string surgery, up to 2 decimals), never
+  `parseFloat(x) * 100`.
+- **Usernames are handles, display names are identity.** Username stays
+  unique (login + adding people); `profiles.display_name` is what renders.
+- **Connections are a friend-request flow.** Rows start `status='pending'`
+  (requester = `user_a`); only accepted connections appear in balances/bills.
+  Recipient accepts via update; either side deletes.
+- **Password changes re-authenticate first** (`changePassword` in
+  `src/lib/auth.tsx`) — `updateUser({password})` alone must never be exposed.
+- **The UI is Alex's identity** — off-black/white minimalism, Work Sans +
+  Dongle, squared corners, design tokens at the top of `src/index.css`. Alex
+  edits the UI to learn; keep the token structure and comments intact, don't
+  re-theme without being asked.
 - **Balances are derived from `bill_shares`, never stored.** Don't add a
   balances table or cache; see WALKTHROUGH §3.2.
 - **Multi-row writes go through Postgres RPCs** (like `create_bill`), not
@@ -25,8 +38,9 @@ documents why every layer is built the way it is.
 - **RLS is the security boundary.** Client-side checks are UX only. Any new
   table in `supabase/schema.sql` needs policies before it ships.
 - Schema changes: `supabase/schema.sql` is the source of truth; it's written
-  to be run once on a fresh project. If you change it, note that existing
-  projects need the delta applied manually.
+  to be run once on a fresh project. Existing databases get deltas as
+  `supabase/migration-*.sql` files (see migration-2.1.sql) that the user runs
+  in the dashboard SQL Editor — always ship both.
 - Login is username-based on top of Supabase email auth via synthetic
   `<username>@splitly.local` addresses (WALKTHROUGH §4.1). Username changes
   must update auth email + profile together.

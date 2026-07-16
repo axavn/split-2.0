@@ -5,7 +5,8 @@ import { useAuth, USERNAME_RULES } from '../lib/auth';
 
 // Spec §3: centered both ways, big SPLITLY wordmark above username/password,
 // with a low-friction "Create account" link that flips the same form into
-// sign-up mode instead of navigating to a separate page.
+// sign-up mode. 2.1: sign-up also collects first + last name, which become
+// the display name (username stays the unique login handle).
 export function LoginPage() {
   const { session, loading, signIn, signUp } = useAuth();
   const navigate = useNavigate();
@@ -13,6 +14,8 @@ export function LoginPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -27,7 +30,7 @@ export function LoginPage() {
     const failure =
       mode === 'login'
         ? await signIn(username, password)
-        : await signUp(username, password);
+        : await signUp(username, password, `${firstName.trim()} ${lastName.trim()}`.trim());
     setBusy(false);
     if (failure) {
       setError(failure);
@@ -41,6 +44,26 @@ export function LoginPage() {
       <h1 className="login__wordmark">SPLITLY</h1>
 
       <form className="login__form" onSubmit={handleSubmit}>
+        {mode === 'signup' && (
+          <div className="name-row">
+            <input
+              className="field"
+              value={firstName}
+              onChange={(event) => setFirstName(event.target.value)}
+              placeholder="First name"
+              aria-label="First name"
+              autoComplete="given-name"
+            />
+            <input
+              className="field"
+              value={lastName}
+              onChange={(event) => setLastName(event.target.value)}
+              placeholder="Last name"
+              aria-label="Last name"
+              autoComplete="family-name"
+            />
+          </div>
+        )}
         <input
           className="field"
           value={username}

@@ -5,8 +5,8 @@
 -- Design decisions:
 --  * All money columns store INTEGER CENTS, never floats. Floating point can't
 --    represent 0.10 exactly, so financial code that uses floats accumulates
---    rounding bugs. The UI only accepts whole dollars (spec §7.1), which we
---    multiply by 100 on the way in.
+--    rounding bugs. The UI accepts dollar amounts with up to two decimals and
+--    converts to cents with exact string/integer math on the way in.
 --  * Balances are DERIVED, never stored. The net balance between two users is
 --    computed from bill_shares rows. Storing a running balance would create a
 --    second source of truth that could drift from the bills that produced it.
@@ -26,6 +26,9 @@ create table public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   username text not null unique
     check (username ~ '^[a-z0-9_]{3,20}$'),
+  -- What other users see ("Alex Nguyen"); username stays unique for
+  -- login and adding people.
+  display_name text not null,
   created_at timestamptz not null default now()
 );
 
@@ -39,8 +42,15 @@ language plpgsql
 security definer set search_path = public
 as $$
 begin
-  insert into public.profiles (id, username)
-  values (new.id, new.raw_user_meta_data ->> 'username');
+  insert into public.profiles (id, username, display_name)
+  values (
+    new.id,
+    new.raw_user_meta_data ->> 'username',
+    coalesce(
+      nullif(trim(new.raw_user_meta_data ->> 'display_name'), ''),
+      new.raw_user_meta_data ->> 'username'
+    )
+  );
   return new;
 end;
 $$;
@@ -58,6 +68,9 @@ create table public.connections (
   id uuid primary key default gen_random_uuid(),
   user_a uuid not null references public.profiles (id) on delete cascade,
   user_b uuid not null references public.profiles (id) on delete cascade,
+  -- Friend-request flow: user_a sends the request (rows start 'pending');
+  -- the balance only exists once user_b accepts.
+  status text not null default 'pending' check (status in ('pending', 'accepted')),
   created_at timestamptz not null default now(),
   check (user_a <> user_b)
 );
@@ -67,7 +80,7 @@ create unique index connections_pair_unique
 
 -- ---------------------------------------------------------------------------
 -- bills: one row per confirmed bill. created_by is the payer.
--- total_amount_cents: integer cents (UI enforces whole dollars).
+-- total_amount_cents: integer cents (UI accepts dollars with up to 2 decimals).
 -- bill_items / receipt columns exist per spec §10 so the receipt-scan feature
 -- can be added later without a migration.
 -- ---------------------------------------------------------------------------
@@ -181,6 +194,19 @@ create policy "users add connections as themselves"
   on public.connections for insert
   to authenticated
   with check (user_a = (select auth.uid()));
+
+-- The recipient may update the row — that's how accepting a request works.
+create policy "recipient can accept a request"
+  on public.connections for update
+  to authenticated
+  using (user_b = (select auth.uid()))
+  with check (user_b = (select auth.uid()));
+
+-- Either side may delete: recipient declining, or requester cancelling.
+create policy "either side can remove a connection"
+  on public.connections for delete
+  to authenticated
+  using (user_a = (select auth.uid()) or user_b = (select auth.uid()));
 
 -- bills: visible to the payer and to anyone with a share on the bill.
 create policy "payer and participants see a bill"

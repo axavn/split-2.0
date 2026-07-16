@@ -16,6 +16,15 @@ export type LedgerEntry = {
   directionCents: number;
 };
 
+// A connection as seen from the current user's side (journal item 4: these
+// start life as pending friend requests and only count once accepted).
+export type Connection = {
+  id: string;
+  status: 'pending' | 'accepted';
+  requestedByMe: boolean;
+  profile: Profile; // the person on the other end
+};
+
 export type PersonBalance = {
   profile: Profile;
   netCents: number;
@@ -25,23 +34,40 @@ export type PersonBalance = {
 // Reads
 // ---------------------------------------------------------------------------
 
-// Everyone the user has added (or been added by). A connection row stores the
-// pair as (user_a, user_b); we join profiles on both sides and return
-// whichever side isn't the current user.
-export async function fetchPeople(userId: string): Promise<Profile[]> {
+type ProfileRow = { id: string; username: string; display_name: string };
+
+function rowToProfile(row: ProfileRow): Profile {
+  return { id: row.id, username: row.username, displayName: row.display_name };
+}
+
+// Every connection the user is on either end of — accepted friendships plus
+// pending requests in both directions. A row stores the pair as
+// (user_a = requester, user_b = recipient); we join profiles on both sides
+// and return whichever side isn't the current user.
+export async function fetchConnections(userId: string): Promise<Connection[]> {
   const { data, error } = await requireSupabase()
     .from('connections')
     .select(
-      `user_a, user_b,
-       a:profiles!connections_user_a_fkey (id, username),
-       b:profiles!connections_user_b_fkey (id, username)`,
+      `id, user_a, user_b, status,
+       a:profiles!connections_user_a_fkey (id, username, display_name),
+       b:profiles!connections_user_b_fkey (id, username, display_name)`,
     )
     .order('created_at', { ascending: false });
   if (error) throw new Error(error.message);
-  type Row = { user_a: string; user_b: string; a: Profile; b: Profile };
-  return ((data ?? []) as unknown as Row[]).map((row) =>
-    row.user_a === userId ? row.b : row.a,
-  );
+  type Row = {
+    id: string;
+    user_a: string;
+    user_b: string;
+    status: 'pending' | 'accepted';
+    a: ProfileRow;
+    b: ProfileRow;
+  };
+  return ((data ?? []) as unknown as Row[]).map((row) => ({
+    id: row.id,
+    status: row.status,
+    requestedByMe: row.user_a === userId,
+    profile: rowToProfile(row.user_a === userId ? row.b : row.a),
+  }));
 }
 
 // The user's full ledger, as two queries:
@@ -139,7 +165,9 @@ export function computeBalances(
 // Writes
 // ---------------------------------------------------------------------------
 
-export async function addPerson(
+// Sends a friend request (the row starts 'pending'; the other person accepts
+// it from their home page).
+export async function sendRequest(
   userId: string,
   rawUsername: string,
 ): Promise<string | null> {
@@ -148,19 +176,38 @@ export async function addPerson(
   const sb = requireSupabase();
   const { data: person } = await sb
     .from('profiles')
-    .select('id, username')
+    .select('id, username, display_name')
     .eq('username', username)
     .maybeSingle();
   if (!person) return `No Splitly user named “${username}” — invite them instead`;
-  if ((person as Profile).id === userId) return "That's you — add someone else";
+  if ((person as ProfileRow).id === userId) return "That's you — add someone else";
   const { error } = await sb
     .from('connections')
-    .insert({ user_a: userId, user_b: (person as Profile).id });
+    .insert({ user_a: userId, user_b: (person as ProfileRow).id });
   if (error) {
     // 23505 = Postgres unique_violation: the pair index caught a duplicate.
-    return error.code === '23505' ? 'Already in your people list' : error.message;
+    return error.code === '23505'
+      ? 'Already added or requested'
+      : error.message;
   }
   return null;
+}
+
+export async function acceptRequest(connectionId: string): Promise<string | null> {
+  const { error } = await requireSupabase()
+    .from('connections')
+    .update({ status: 'accepted' })
+    .eq('id', connectionId);
+  return error ? error.message : null;
+}
+
+// Declining (recipient) and cancelling (requester) are both just deletion.
+export async function removeConnection(connectionId: string): Promise<string | null> {
+  const { error } = await requireSupabase()
+    .from('connections')
+    .delete()
+    .eq('id', connectionId);
+  return error ? error.message : null;
 }
 
 export type NewBill = {

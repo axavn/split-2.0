@@ -10,7 +10,13 @@ import type { Session } from '@supabase/supabase-js';
 
 import { requireSupabase, supabase } from './supabase';
 
-export type Profile = { id: string; username: string };
+export type Profile = {
+  id: string;
+  username: string;
+  // What other users see ("Alex Nguyen"); username stays unique and is what
+  // you log in with / get added by (journal item 3).
+  displayName: string;
+};
 
 // Supabase Auth authenticates with email + password. The spec wants a
 // username login, so each account gets a synthetic, deterministic email
@@ -28,16 +34,30 @@ function normalizeUsername(raw: string): string | null {
   return USERNAME_RE.test(username) ? username : null;
 }
 
+type ProfileRow = { id: string; username: string; display_name: string };
+
+function rowToProfile(row: ProfileRow): Profile {
+  return { id: row.id, username: row.username, displayName: row.display_name };
+}
+
 type AuthContextValue = {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
   // These return a user-displayable error message, or null on success.
   signIn: (username: string, password: string) => Promise<string | null>;
-  signUp: (username: string, password: string) => Promise<string | null>;
+  signUp: (
+    username: string,
+    password: string,
+    displayName: string,
+  ) => Promise<string | null>;
   signOut: () => Promise<void>;
   updateUsername: (newUsername: string) => Promise<string | null>;
-  changePassword: (newPassword: string) => Promise<string | null>;
+  updateDisplayName: (newDisplayName: string) => Promise<string | null>;
+  changePassword: (
+    oldPassword: string,
+    newPassword: string,
+  ) => Promise<string | null>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -67,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Whenever the session changes, load the matching profile row. If the row
   // isn't there yet (the DB trigger creates it during signup), fall back to
-  // the username we stashed in auth metadata so the UI never shows a blank.
+  // the metadata we stashed at signup so the UI never shows a blank.
   useEffect(() => {
     if (!session || !supabase) {
       setProfile(null);
@@ -76,15 +96,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     supabase
       .from('profiles')
-      .select('id, username')
+      .select('id, username, display_name')
       .eq('id', session.user.id)
       .maybeSingle()
       .then(({ data }) => {
         if (cancelled) return;
-        const fallback = session.user.user_metadata?.username as string | undefined;
+        if (data) {
+          setProfile(rowToProfile(data as ProfileRow));
+          return;
+        }
+        const meta = session.user.user_metadata as
+          | { username?: string; display_name?: string }
+          | undefined;
         setProfile(
-          (data as Profile | null) ??
-            (fallback ? { id: session.user.id, username: fallback } : null),
+          meta?.username
+            ? {
+                id: session.user.id,
+                username: meta.username,
+                displayName: meta.display_name || meta.username,
+              }
+            : null,
         );
       });
     return () => {
@@ -111,10 +142,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         return null;
       },
-      signUp: async (rawUsername, password) => {
+      signUp: async (rawUsername, password, displayName) => {
         const username = normalizeUsername(rawUsername);
         if (!username) return `Invalid username (${USERNAME_RULES})`;
         if (password.length < 6) return 'Password must be at least 6 characters';
+        if (!displayName.trim()) return 'Enter your name';
         // Username uniqueness is ultimately enforced by the DB constraint,
         // but checking first gives a friendly error instead of a failed signup.
         const sb = requireSupabase();
@@ -127,7 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { error } = await sb.auth.signUp({
           email: usernameToEmail(username),
           password,
-          options: { data: { username } },
+          options: { data: { username, display_name: displayName.trim() } },
         });
         return error ? error.message : null;
       },
@@ -137,7 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updateUsername: async (rawUsername) => {
         const username = normalizeUsername(rawUsername);
         if (!username) return `Invalid username (${USERNAME_RULES})`;
-        if (!session) return 'Not signed in';
+        if (!session || !profile) return 'Not signed in';
         const sb = requireSupabase();
         const { data: taken } = await sb
           .from('profiles')
@@ -159,14 +191,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .update({ username })
           .eq('id', session.user.id);
         if (profileError) return profileError.message;
-        setProfile({ id: session.user.id, username });
+        setProfile({ ...profile, username });
         return null;
       },
-      changePassword: async (newPassword) => {
+      updateDisplayName: async (newDisplayName) => {
+        const displayName = newDisplayName.trim();
+        if (!displayName) return 'Enter a name';
+        if (!session || !profile) return 'Not signed in';
+        const { error } = await requireSupabase()
+          .from('profiles')
+          .update({ display_name: displayName })
+          .eq('id', session.user.id);
+        if (error) return error.message;
+        setProfile({ ...profile, displayName });
+        return null;
+      },
+      // Journal item 5: verify the old password before setting a new one.
+      // Supabase's updateUser doesn't check the current password itself (a
+      // valid session is enough), so we prove the user knows it by
+      // re-authenticating first — a failed sign-in means a wrong old password.
+      changePassword: async (oldPassword, newPassword) => {
+        if (!session?.user.email) return 'Not signed in';
         if (newPassword.length < 6) return 'Password must be at least 6 characters';
-        const { error } = await requireSupabase().auth.updateUser({
-          password: newPassword,
+        const sb = requireSupabase();
+        const { error: reauthError } = await sb.auth.signInWithPassword({
+          email: session.user.email,
+          password: oldPassword,
         });
+        if (reauthError) return 'Current password is incorrect';
+        const { error } = await sb.auth.updateUser({ password: newPassword });
         return error ? error.message : null;
       },
     }),

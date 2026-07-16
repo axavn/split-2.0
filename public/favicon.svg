@@ -1,7 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="18" fill="#b8a8e8" />
-  <rect x="6" y="6" width="52" height="52" rx="14" fill="#cabdf0" />
-  <path d="M32 12v40" stroke="#5a4a8a" stroke-width="4.5" stroke-linecap="round" />
-  <circle cx="21" cy="24" r="7" fill="#8ed9b5" />
-  <circle cx="43" cy="40" r="7" fill="#f2a1a1" />
+  <rect width="64" height="64" fill="#111113" />
+  <text x="32" y="34" text-anchor="middle" dominant-baseline="central"
+    font-family="Arial, sans-serif" font-size="42" font-weight="bold"
+    fill="#f4f4f2">S</text>
 </svg>

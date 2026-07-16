@@ -39,13 +39,33 @@ Netlify: connect the repo (settings auto-read from [`netlify.toml`](./netlify.to
 then add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` under
 **Site settings → Environment variables** and deploy.
 
-## What's in v1 (and what isn't)
+## Install it on your phone (iOS / Android)
+
+Splitly is a PWA — no App Store needed:
+
+- **iPhone/iPad:** open the site in **Safari** → tap the **Share** button →
+  **Add to Home Screen** → **Add**. It launches full-screen with its own icon.
+- **Android:** open the site in Chrome → menu (⋮) → **Add to Home screen** /
+  **Install app**.
+
+## What's in 2.1
 
 - ✅ Username/password accounts, persistent sessions
-- ✅ Add people by username, invite link for everyone else
-- ✅ Manual bills: even split (optional "include yourself") or full price, whole dollars only
-- ✅ Home page with Owe / Collect / All filters and infinite scroll
+- ✅ Display names (first + last at signup, editable) on top of unique usernames
+- ✅ Friend requests — adding someone sends a request they accept or decline
+- ✅ Manual bills: even split (optional "include yourself") or full price,
+  amounts with up to 2 decimals
+- ✅ Home page with Owe / Collect / All filters, wordless green/red balances,
+  infinite scroll
 - ✅ Per-person balance detail with full transaction history
-- ✅ Account page: change username, change password, log out
+- ✅ Account page: display name, username, old→new→confirm password change, log out
+- ✅ Installable on phones (PWA) — see above
 - ⏳ Receipt scanning (OCR) — deliberately deferred; the schema (`bills.source`,
   `bill_items`, `bill_shares.bill_item_id`) is already shaped for it.
+
+## Upgrading an existing database
+
+Fresh Supabase projects just run `supabase/schema.sql`. A database created
+before 2.1 needs the one-shot migration: paste
+[`supabase/migration-2.1.sql`](./supabase/migration-2.1.sql) into the SQL
+Editor and run it (adds `profiles.display_name` and `connections.status`).

@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { useAuth, type Profile } from '../lib/auth';
-import { createBill, fetchPeople } from '../lib/data';
-import { formatCents, splitCentsEvenly } from '../lib/money';
+import { createBill, fetchConnections } from '../lib/data';
+import { formatCents, parseAmountToCents, splitCentsEvenly } from '../lib/money';
 
 // Spec §7.1 manual entry: item, people, integer-only amount, split evenly or
 // full price, an "Include yourself" toggle that only appears for even splits,
@@ -25,9 +25,13 @@ export function AddBillPage() {
   useEffect(() => {
     if (!session) return;
     let cancelled = false;
-    fetchPeople(session.user.id)
+    // Only accepted connections can be on a bill — pending requests aren't
+    // people you share balances with yet.
+    fetchConnections(session.user.id)
       .then((result) => {
-        if (!cancelled) setPeople(result);
+        if (!cancelled) {
+          setPeople(result.filter((c) => c.status === 'accepted').map((c) => c.profile));
+        }
       })
       .catch((cause: Error) => {
         if (!cancelled) setError(cause.message);
@@ -37,14 +41,15 @@ export function AddBillPage() {
     };
   }, [session]);
 
-  // Integer-only amount (spec: "only allows integers"): the input is text
-  // with a digits-only regex gate, so decimals and letters never even enter
-  // component state — there's nothing to validate later.
+  // Money-shaped input only (2.1: decimals allowed, journal item 2): the
+  // regex gate admits digits plus at most one dot and two decimal places, so
+  // anything else never even enters component state. Parsing to cents happens
+  // in exact integer math (see parseAmountToCents).
   const handleAmountChange = (raw: string) => {
-    if (/^\d*$/.test(raw)) setAmount(raw);
+    if (/^\d*\.?\d{0,2}$/.test(raw)) setAmount(raw);
   };
 
-  const totalCents = amount === '' ? 0 : Number(amount) * 100;
+  const totalCents = parseAmountToCents(amount) ?? 0;
 
   const toggleSelected = (id: string) => {
     setSelectedIds((prev) =>
@@ -121,7 +126,7 @@ export function AddBillPage() {
                 type="button"
                 className={`chip${selectedIds.includes(person.id) ? ' chip--selected' : ''}`}
                 onClick={() => toggleSelected(person.id)}>
-                {person.username}
+                {person.displayName}
               </button>
             ))}
             {!people && <span className="muted">Loading people…</span>}
@@ -132,9 +137,9 @@ export function AddBillPage() {
             className="field"
             value={amount}
             onChange={(event) => handleAmountChange(event.target.value)}
-            placeholder="Whole dollars, e.g. 42"
-            inputMode="numeric"
-            aria-label="Amount in whole dollars"
+            placeholder="e.g. 42.50"
+            inputMode="decimal"
+            aria-label="Amount"
           />
 
           <p className="field-label">How should it split?</p>

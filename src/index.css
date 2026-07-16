@@ -1,42 +1,41 @@
 /* ==========================================================================
-   Split 2.0 — claymorphism design system (spec §9)
+   Splitly 2.1 — minimalist off-black & white design (Alex's identity)
 
-   The whole aesthetic hangs on two shadow recipes:
-     --clay-out: light source top-left → white highlight up-left, soft dark
-                 shadow down-right. Makes elements look raised / puffy.
-     --clay-in:  the same two shadows inverted and inset. Makes elements look
-                 pressed INTO the clay — used for inputs, the static balance
-                 pill, and every button's :active state (press feedback).
-   Everything else is warm pastels, big radii, and a rounded font (Nunito).
+   HOW TO EDIT THIS FILE (start here):
+   Everything visual flows from the design tokens in :root below. Change a
+   token and the whole app follows — that's the point of CSS variables.
+   Rough map of what to tweak:
+     · colors        -> --bg / --surface / --border / --text / --text-soft
+     · balance colors-> --positive / --negative
+     · roundness     -> --radius (0 = sharp, 2px = current, 16px = soft)
+     · fonts         -> --font-ui / --font-display (swap the Google Fonts
+                        <link> in index.html to match)
+     · spacing scale -> the paddings/gaps below are multiples of 4px
+   The look is border-based minimalism: hairline 1px borders on near-black
+   surfaces, no shadows, color reserved for balance direction only.
    ========================================================================== */
 
 :root {
-  --bg: #f4efe6;            /* warm cream */
-  --surface: #faf6ee;       /* raised clay */
-  --surface-sunken: #ece5d8;/* carved clay (inputs) */
-  --lavender: #cabdf0;
-  --lavender-deep: #8f77cf;
-  --mint: #bfe8d4;
-  --text: #3d3a45;          /* charcoal, not black */
-  --text-soft: #8b8595;
-  --positive: #2f9e6b;      /* green: they owe you */
-  --negative: #d95f57;      /* red: you owe them */
+  /* ---- design tokens ----------------------------------------------------- */
+  --bg: #111113;          /* off-black, not pure #000 (pure black is harsh) */
+  --surface: #18181b;     /* cards and rows sit barely above the background */
+  --surface-2: #222226;   /* pressed / hover state */
+  --border: #2b2b30;      /* 1px hairlines do the separating, not shadows */
+  --text: #f4f4f2;        /* off-white, not pure #fff */
+  --text-soft: #9a9aa2;   /* secondary text */
+  --positive: #4ade80;    /* green: they owe you */
+  --negative: #f87171;    /* red: you owe them */
 
-  --clay-out:
-    -6px -6px 12px rgba(255, 255, 255, 0.7),
-    6px 6px 12px rgba(61, 58, 69, 0.15);
-  --clay-out-soft:
-    -4px -4px 9px rgba(255, 255, 255, 0.6),
-    4px 4px 10px rgba(61, 58, 69, 0.11);
-  --clay-in:
-    inset 4px 4px 8px rgba(61, 58, 69, 0.14),
-    inset -4px -4px 8px rgba(255, 255, 255, 0.75);
+  --radius: 2px;          /* squared corners (journal item 6) */
 
-  --radius: 20px;
-  --radius-big: 28px;
+  --font-ui: 'Work Sans', system-ui, -apple-system, sans-serif;
+  /* Dongle renders small with lots of built-in line spacing — use it big
+     (wordmark, balance numbers) and with tight line-height. */
+  --font-display: 'Dongle', var(--font-ui);
+  /* ------------------------------------------------------------------------ */
 
-  color-scheme: light;
-  font-family: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: dark;
+  font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -48,8 +47,8 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-size: 16px;
-  line-height: 1.45;
+  font-size: 15px;
+  line-height: 1.5;
 }
 
 button {
@@ -68,7 +67,7 @@ a {
 }
 
 :focus-visible {
-  outline: 3px solid var(--lavender-deep);
+  outline: 2px solid var(--text);
   outline-offset: 2px;
 }
 
@@ -78,15 +77,17 @@ a {
   min-height: 100dvh;
   display: grid;
   place-items: center;
-  font-size: 40px;
-  font-weight: 900;
-  letter-spacing: 0.12em;
+  font-family: var(--font-display);
+  font-size: 64px;
+  line-height: 1;
   color: var(--text-soft);
+  letter-spacing: 0.06em;
 }
 
 .shell__content {
-  /* Room so the last list item can scroll clear of the fixed bottom nav. */
-  padding-bottom: 116px;
+  /* Room so the last list item scrolls clear of the fixed bottom nav
+     (+ the iPhone home-indicator area in installed/standalone mode). */
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
 }
 
 .page {
@@ -96,60 +97,72 @@ a {
 }
 
 .page__title {
-  font-size: 30px;
-  font-weight: 800;
-  margin: 0 0 18px;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0 0 20px;
 }
 
 .stack {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
 }
 
 .stack--roomy {
-  gap: 22px;
+  gap: 16px;
 }
 
 .card {
   background: var(--surface);
-  border-radius: var(--radius-big);
-  box-shadow: var(--clay-out-soft);
-  padding: 18px;
-  margin-top: 22px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-top: 20px;
+}
+
+.name-row {
+  display: flex;
+  gap: 10px;
+}
+
+.name-row .field {
+  flex: 1;
+  min-width: 0;
 }
 
 /* Text helpers -------------------------------------------------------------- */
 
 .muted {
   color: var(--text-soft);
-  font-size: 14px;
+  font-size: 13px;
   margin: 0;
 }
 
 .error-text {
   color: var(--negative);
-  font-weight: 700;
-  font-size: 14px;
+  font-weight: 500;
+  font-size: 13px;
   margin: 0;
 }
 
 .success-text {
   color: var(--positive);
-  font-weight: 700;
-  font-size: 14px;
+  font-weight: 500;
+  font-size: 13px;
   margin: 0;
 }
 
 .empty {
   text-align: center;
   color: var(--text-soft);
-  padding: 40px 12px;
+  padding: 48px 12px;
+  font-size: 14px;
 }
 
 .empty a {
-  color: var(--lavender-deep);
-  font-weight: 700;
+  color: var(--text);
+  font-weight: 600;
 }
 
 .amount--positive {
@@ -167,49 +180,68 @@ a {
 /* Buttons ------------------------------------------------------------------ */
 
 .btn {
-  border: none;
-  background: var(--surface);
+  background: transparent;
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: var(--clay-out);
-  padding: 13px 18px;
-  font-weight: 800;
-  font-size: 15px;
-  transition: box-shadow 0.12s, transform 0.12s;
+  padding: 11px 16px;
+  font-weight: 500;
+  font-size: 14px;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.btn:hover {
+  border-color: var(--text-soft);
 }
 
 .btn:active {
-  box-shadow: var(--clay-in);
-  transform: translateY(1px);
+  background: var(--surface-2);
 }
 
 .btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
+/* Primary = inverted: off-white fill, off-black text. The single strongest
+   move in a monochrome UI, so it's reserved for the main action per screen. */
 .btn--primary {
-  background: var(--lavender);
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
+}
+
+.btn--primary:active {
+  background: var(--text-soft);
 }
 
 .btn--danger {
-  background: #f3c1bc;
-  color: #8f3a34;
+  border-color: var(--negative);
+  color: var(--negative);
 }
 
 .btn--full {
   width: 100%;
 }
 
+.btn--small {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
 /* Forms -------------------------------------------------------------------- */
 
 .field {
   width: 100%;
-  border: none;
-  background: var(--surface-sunken);
-  box-shadow: var(--clay-in);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 14px 16px;
+  padding: 12px 14px;
   outline: none;
+  transition: border-color 0.1s;
+}
+
+.field:focus {
+  border-color: var(--text-soft);
 }
 
 .field::placeholder {
@@ -217,43 +249,41 @@ a {
 }
 
 .field-label {
-  font-size: 14px;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   color: var(--text-soft);
-  margin: 8px 0 0;
+  margin: 10px 0 0;
 }
 
 .form-preview {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--lavender-deep);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-soft);
   margin: 0;
 }
 
 .chip-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
 }
 
 .chip {
-  border: none;
-  background: var(--surface);
-  box-shadow: var(--clay-out-soft);
-  border-radius: 999px;
-  padding: 9px 16px;
-  font-weight: 700;
-  font-size: 14px;
-  transition: box-shadow 0.12s, background 0.12s;
-}
-
-.chip:active {
-  box-shadow: var(--clay-in);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  font-weight: 500;
+  font-size: 13px;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
 }
 
 .chip--selected {
-  background: var(--lavender);
-  box-shadow: var(--clay-in);
+  background: var(--text);
+  border-color: var(--text);
+  color: var(--bg);
 }
 
 /* Login (§3) ---------------------------------------------------------------- */
@@ -264,167 +294,216 @@ a {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 26px;
+  gap: 22px;
   padding: 24px;
 }
 
 .login__wordmark {
-  font-size: 46px;
-  font-weight: 900;
-  letter-spacing: 0.14em;
+  font-family: var(--font-display);
+  font-size: 96px;
+  font-weight: 700;
+  line-height: 0.8;
+  letter-spacing: 0.04em;
   margin: 0;
   text-align: center;
-  text-shadow:
-    -2px -2px 4px rgba(255, 255, 255, 0.9),
-    2px 2px 5px rgba(61, 58, 69, 0.25);
 }
 
 .login__form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
   width: min(340px, 100%);
 }
 
 .login__toggle {
   border: none;
   background: none;
-  color: var(--lavender-deep);
-  font-weight: 800;
+  color: var(--text-soft);
+  font-weight: 500;
   font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.login__toggle:hover {
+  color: var(--text);
 }
 
 /* Bottom nav (§4) ------------------------------------------------------------ */
 
 .bottom-nav {
   position: fixed;
-  bottom: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(440px, calc(100% - 28px));
+  bottom: 0;
+  left: 0;
+  right: 0;
   display: flex;
   justify-content: space-around;
   align-items: center;
-  background: var(--surface);
-  border-radius: var(--radius-big);
-  box-shadow: var(--clay-out);
-  padding: 10px 12px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
 }
 
 .bottom-nav__link {
   display: grid;
   place-items: center;
   color: var(--text-soft);
-  border-radius: 18px;
-  padding: 8px 20px;
-  transition: box-shadow 0.12s, color 0.12s;
+  padding: 8px 24px;
+  border-radius: var(--radius);
+  transition: color 0.1s;
 }
 
 .bottom-nav__link--active {
   color: var(--text);
-  box-shadow: var(--clay-in);
-}
-
-.bottom-nav__link:active {
-  box-shadow: var(--clay-in);
 }
 
 .bottom-nav__plus {
   display: grid;
   place-items: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  background: var(--lavender);
-  box-shadow: var(--clay-out-soft);
-  color: var(--text);
+  width: 42px;
+  height: 42px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius);
 }
 
 /* Home (§5) ------------------------------------------------------------------ */
 
 .welcome-line {
   text-align: right;
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--text-soft);
-  margin: 0 0 16px;
+  margin: 0 0 18px;
 }
 
 .filters {
   display: flex;
-  gap: 12px;
-  margin-bottom: 22px;
+  gap: 0;
+  margin-bottom: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
 }
 
 .filter-pill {
   flex: 1;
+  background: transparent;
   border: none;
-  background: var(--surface);
-  box-shadow: var(--clay-out-soft);
-  border-radius: 999px;
-  padding: 10px 0;
-  font-weight: 800;
-  font-size: 14px;
-  transition: box-shadow 0.12s, background 0.12s;
+  padding: 9px 0;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--text-soft);
+  transition: background 0.1s, color 0.1s;
 }
 
-.filter-pill:active {
-  box-shadow: var(--clay-in);
+.filter-pill + .filter-pill {
+  border-left: 1px solid var(--border);
 }
 
 .filter-pill--active {
-  background: var(--mint);
-  box-shadow: var(--clay-in);
+  background: var(--text);
+  color: var(--bg);
 }
 
+/* Friend requests (2.1) ------------------------------------------------------- */
+
+.requests {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.requests__title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-soft);
+  margin: 0;
+}
+
+.requests__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.requests__who {
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.requests__username {
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+.requests__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.requests__outgoing {
+  margin-bottom: 16px;
+}
+
+/* Person rows: name on the left, one big wordless number on the right —
+   color alone says who owes whom (journal item 6). */
 .person-button {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   width: 100%;
-  border: none;
   background: var(--surface);
-  border-radius: var(--radius-big);
-  box-shadow: var(--clay-out);
-  padding: 16px 18px;
-  min-height: 84px;
-  text-align: right;
-  transition: box-shadow 0.12s, transform 0.12s;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  min-height: 72px;
+  text-align: left;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.person-button:hover {
+  border-color: var(--text-soft);
 }
 
 .person-button:active {
-  box-shadow: var(--clay-in);
-  transform: translateY(1px);
+  background: var(--surface-2);
 }
 
-.person-button__avatar {
-  display: grid;
-  place-items: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: var(--lavender);
-  box-shadow: var(--clay-out-soft);
-  font-weight: 900;
-  font-size: 20px;
-  flex-shrink: 0;
-}
-
-/* Spec §5: name top right, balance right middle — a right-aligned column. */
-.person-button__right {
+.person-button__names {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
+  gap: 1px;
+  min-width: 0;
 }
 
 .person-button__name {
-  font-weight: 800;
-  font-size: 17px;
+  font-weight: 600;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.person-button__username {
+  color: var(--text-soft);
+  font-size: 12.5px;
 }
 
 .person-button__balance {
-  font-weight: 800;
-  font-size: 15px;
+  font-family: var(--font-display);
+  font-size: 46px;
+  font-weight: 700;
+  line-height: 0.75;
+  white-space: nowrap;
 }
 
 .sentinel {
@@ -435,29 +514,27 @@ a {
 
 .detail__name {
   text-align: right;
-  font-size: 22px;
-  font-weight: 900;
-  margin: 0 0 26px;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 24px;
 }
 
 .detail__direction {
-  font-size: 17px;
-  font-weight: 700;
+  font-size: 14px;
   color: var(--text-soft);
-  margin: 0 0 10px;
+  margin: 0 0 4px;
 }
 
-/* Static pill (spec: a NON-pressable button): the inset shadow reads as
-   "carved in", the opposite of the raised pressable elements. */
+/* Static (non-pressable) balance readout: no border, no background — just
+   the number, huge. The absence of button styling is what says "not a
+   button" in a border-based UI. */
 .balance-pill {
   display: inline-block;
-  background: var(--surface-sunken);
-  box-shadow: var(--clay-in);
-  border-radius: 999px;
-  padding: 12px 30px;
-  font-size: 30px;
-  font-weight: 900;
-  margin-bottom: 26px;
+  font-family: var(--font-display);
+  font-size: 88px;
+  font-weight: 700;
+  line-height: 0.75;
+  margin-bottom: 28px;
 }
 
 .txn {
@@ -466,9 +543,9 @@ a {
   justify-content: space-between;
   gap: 12px;
   background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: var(--clay-out-soft);
-  padding: 13px 16px;
+  padding: 12px 14px;
 }
 
 .txn__main {
@@ -476,20 +553,22 @@ a {
   flex-direction: column;
   gap: 2px;
   text-align: left;
+  min-width: 0;
 }
 
 .txn__desc {
-  font-weight: 800;
+  font-weight: 600;
+  font-size: 14px;
 }
 
 .txn__meta {
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--text-soft);
 }
 
 .txn__amount {
-  font-weight: 900;
-  font-size: 16px;
+  font-weight: 600;
+  font-size: 15px;
   white-space: nowrap;
 }
 
@@ -499,20 +578,23 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 10px;
   background: var(--surface);
-  border-radius: var(--radius-big);
-  box-shadow: var(--clay-out);
-  padding: 26px;
-  font-size: 19px;
-  font-weight: 800;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  font-size: 16px;
+  font-weight: 600;
   text-decoration: none;
-  transition: box-shadow 0.12s, transform 0.12s;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.add-choice:hover {
+  border-color: var(--text-soft);
 }
 
 .add-choice:active {
-  box-shadow: var(--clay-in);
-  transform: translateY(1px);
+  background: var(--surface-2);
 }
 
 /* Setup checklist --------------------------------------------------------------- */
@@ -522,7 +604,7 @@ a {
 }
 
 .setup__intro {
-  font-size: 16px;
+  font-size: 15px;
   text-align: center;
   margin: 14px 0 8px;
 }
@@ -535,8 +617,8 @@ a {
 }
 
 .setup__steps code {
-  background: var(--surface-sunken);
-  border-radius: 6px;
+  background: var(--surface-2);
+  border-radius: var(--radius);
   padding: 1px 6px;
-  font-size: 13.5px;
+  font-size: 13px;
 }

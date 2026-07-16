@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import { useAuth, type Profile } from '../lib/auth';
-import { fetchLedger, fetchPeople, type LedgerEntry } from '../lib/data';
+import { fetchConnections, fetchLedger, type LedgerEntry } from '../lib/data';
 import { formatCents, formatDate } from '../lib/money';
 import { useInfiniteList } from '../lib/useInfiniteList';
 
@@ -19,10 +19,12 @@ export function BalanceDetailPage() {
   useEffect(() => {
     if (!session || !userId) return;
     let cancelled = false;
-    Promise.all([fetchPeople(session.user.id), fetchLedger(session.user.id)])
-      .then(([people, ledger]) => {
+    Promise.all([fetchConnections(session.user.id), fetchLedger(session.user.id)])
+      .then(([connections, ledger]) => {
         if (cancelled) return;
-        setPerson(people.find((p) => p.id === userId) ?? null);
+        setPerson(
+          connections.find((c) => c.profile.id === userId)?.profile ?? null,
+        );
         setEntries(ledger.filter((entry) => entry.otherUserId === userId));
       })
       .catch((cause: Error) => {
@@ -41,7 +43,7 @@ export function BalanceDetailPage() {
 
   return (
     <div className="page">
-      <p className="detail__name">{person?.username ?? 'Unknown'}</p>
+      <p className="detail__name">{person?.displayName ?? 'Unknown'}</p>
 
       <p className="detail__direction">
         {netCents > 0 ? 'You collect…' : netCents < 0 ? 'You owe…' : 'All settled up'}

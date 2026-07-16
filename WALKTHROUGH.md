@@ -260,7 +260,92 @@ exclusively for balance direction, so color always *means* something.
 at build time — a static site has no runtime server to read secrets from
 (and neither value is secret; RLS is the protection, §3.3).
 
-## 9. What's deliberately not here
+## 9. The 2.1 release (from Alex's testing journal)
+
+Six changes driven by actually using the app. What each one teaches:
+
+### 9.1 Decimal amounts — and why not `parseFloat`
+
+The integer-only input was a spec misread; money obviously needs cents. The
+fix is *not* `parseFloat(x) * 100`: floats strike again (`4.56 * 100 ===
+455.99999…`). `parseAmountToCents` splits the string with a regex —
+`"42.5"` → dollars `42`, cents `"5".padEnd(2,'0')` = `50` → `4250` — pure
+integer math end to end. The input gate regex loosened from `^\d*$` to
+`^\d*\.?\d{0,2}$`. Nothing else changed: the database was storing cents all
+along, so a UI-layer fix was the whole fix. That's the payoff of picking the
+right representation early.
+
+### 9.2 Display names: identity vs. handle
+
+`profiles` gained `display_name`. The username stays unique — it's the
+*handle* (login, adding people); the display name is the *identity* ("Alex
+Nguyen"). Splitting these is standard design (GitHub, Twitter, Discord all do
+it) because names collide and change, while handles must be unique and
+stable-ish. The migration backfills existing users' display names from their
+usernames; the signup trigger now reads both from auth metadata.
+
+### 9.3 Friend requests: a status column, not a new table
+
+A request and a friendship are the same relationship at different stages, so
+`connections` just gained `status: pending → accepted` rather than a separate
+requests table (which would need moving rows across tables on accept). New
+RLS rules encode the social contract: only the *recipient* may update
+(accept), and either side may delete (decline / cancel). Balances and bills
+only count accepted connections — enforced in the client queries, with RLS
+still guaranteeing nobody sees strangers' data.
+
+### 9.4 Password change requires the old password
+
+Supabase's `updateUser({password})` only requires a valid session — so a
+borrowed unlocked phone could change your password. The fix: re-authenticate
+with `signInWithPassword(currentEmail, oldPassword)` first; only if that
+succeeds do we set the new one. "Confirm new password" is a pure client-side
+typo check — it never needs the server.
+
+### 9.5 iOS without the App Store: PWA
+
+"Installable on iPhones without a complicated process" = a Progressive Web
+App. Safari's *Add to Home Screen* turns the site into a standalone
+full-screen app. What makes it work:
+
+- `manifest.webmanifest` with `display: "standalone"` + PNG icons (Android/
+  desktop Chrome read this)
+- `apple-touch-icon.png` + `apple-mobile-web-app-*` meta tags (Safari
+  largely ignores the manifest and reads these instead; iOS won't take SVG
+  icons, hence the generated PNGs)
+- `viewport-fit=cover` + `env(safe-area-inset-bottom)` padding so the bottom
+  nav clears the iPhone home indicator in standalone mode
+
+A real App Store build later = wrap this same site in Capacitor (needs a Mac
++ $99/yr Apple Developer account). The PWA is the right v1.
+
+### 9.6 The redesign — and how to edit the UI yourself
+
+The claymorphism theme is gone in favor of Alex's identity: off-black &
+off-white minimalism, Work Sans (UI) + Dongle (display), squared corners,
+borders instead of shadows, color used *only* for balance direction.
+
+`src/index.css` is now structured for hand-editing — the entire look derives
+from the token block at the top of the file:
+
+- **Change a color/font/radius once** in `:root` and everything follows.
+  That's the design-token pattern; it's how real design systems work.
+- **Hierarchy without color:** in a monochrome UI you create emphasis with
+  size, weight, and one inverted element (the off-white primary button).
+  Resist adding accent colors — the green/red balances pop *because*
+  they're the only color on screen.
+- **Dongle quirk:** it renders visually small with huge built-in line
+  spacing, so it's used at ~2× the size you'd expect with `line-height:
+  0.75`. Display fonts often need this kind of tuning.
+- **Borders vs shadows:** minimal UIs separate surfaces with 1px hairlines
+  (`--border`) on barely-different background tones. If you want depth back,
+  reintroduce `box-shadow` on `.card`/`.person-button` and lighten borders.
+
+Good exercises: change `--radius` to 12px and see the feel shift; swap
+Dongle for another display font (one line in `index.html`, one token here);
+make a light theme by inverting the five neutral tokens.
+
+## 10. What's deliberately not here
 
 - **Receipt OCR (§7.2)** — needs a paid parsing API (Veryfi/Taggun). The
   schema, `bills.source` flag, and the Add Bill page are shaped so the scan
