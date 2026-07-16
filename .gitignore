@@ -1,0 +1,30 @@
+# Logs
+logs
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+pnpm-debug.*
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+*.local
+
+# Netlify
+.netlify/
+
+# TypeScript
+*.tsbuildinfo
+
+# Env — real keys live here, never committed (.env.example is the template)
+.env
+.env*.local
+
+# Editor / OS
+.idea/
+.DS_Store
+*.pem

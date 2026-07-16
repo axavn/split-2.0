@@ -1,0 +1,17 @@
+{
+  "name": "Splitly",
+  "short_name": "Splitly",
+  "description": "Track shared expenses and running balances with the people you split bills with.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4efe6",
+  "theme_color": "#f4efe6",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
