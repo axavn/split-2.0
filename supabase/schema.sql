@@ -113,7 +113,45 @@ create index bills_created_by_idx on public.bills (created_by);
 
 -- ============================================================================
 -- Row Level Security
+--
+-- Pitfall this schema learned the hard way: policies on `bills` and
+-- `bill_shares` need to check each other ("participants may read a bill",
+-- "the payer may read its shares"). If each policy queries the other table
+-- directly, Postgres applies RLS to those subqueries too and the policies
+-- re-trigger each other — "infinite recursion detected". The fix is the two
+-- SECURITY DEFINER helpers below: they run as the function owner, which
+-- bypasses RLS inside the lookup, breaking the cycle while exposing only a
+-- boolean.
 -- ============================================================================
+
+create function public.is_bill_payer(p_bill_id uuid, p_user uuid)
+returns boolean
+language sql
+security definer set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.bills b
+    where b.id = p_bill_id and b.created_by = p_user
+  );
+$$;
+
+create function public.is_bill_participant(p_bill_id uuid, p_user uuid)
+returns boolean
+language sql
+security definer set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.bill_shares s
+    where s.bill_id = p_bill_id and s.user_id = p_user
+  );
+$$;
+
+revoke all on function public.is_bill_payer(uuid, uuid) from public, anon;
+grant execute on function public.is_bill_payer(uuid, uuid) to authenticated;
+revoke all on function public.is_bill_participant(uuid, uuid) from public, anon;
+grant execute on function public.is_bill_participant(uuid, uuid) to authenticated;
 alter table public.profiles enable row level security;
 alter table public.connections enable row level security;
 alter table public.bills enable row level security;
@@ -150,10 +188,7 @@ create policy "payer and participants see a bill"
   to authenticated
   using (
     created_by = (select auth.uid())
-    or exists (
-      select 1 from public.bill_shares s
-      where s.bill_id = bills.id and s.user_id = (select auth.uid())
-    )
+    or public.is_bill_participant(id, (select auth.uid()))
   );
 
 create policy "users create bills as themselves"
@@ -166,28 +201,14 @@ create policy "bill items follow bill visibility"
   on public.bill_items for select
   to authenticated
   using (
-    exists (
-      select 1 from public.bills b
-      where b.id = bill_items.bill_id
-        and (
-          b.created_by = (select auth.uid())
-          or exists (
-            select 1 from public.bill_shares s
-            where s.bill_id = b.id and s.user_id = (select auth.uid())
-          )
-        )
-    )
+    public.is_bill_payer(bill_id, (select auth.uid()))
+    or public.is_bill_participant(bill_id, (select auth.uid()))
   );
 
 create policy "payer inserts bill items"
   on public.bill_items for insert
   to authenticated
-  with check (
-    exists (
-      select 1 from public.bills b
-      where b.id = bill_items.bill_id and b.created_by = (select auth.uid())
-    )
-  );
+  with check (public.is_bill_payer(bill_id, (select auth.uid())));
 
 -- bill_shares: you see shares you owe, plus all shares on bills you paid;
 -- only the bill's payer can create shares (normally via create_bill below).
@@ -196,21 +217,13 @@ create policy "users see shares involving them"
   to authenticated
   using (
     user_id = (select auth.uid())
-    or exists (
-      select 1 from public.bills b
-      where b.id = bill_shares.bill_id and b.created_by = (select auth.uid())
-    )
+    or public.is_bill_payer(bill_id, (select auth.uid()))
   );
 
 create policy "payer inserts shares for their bill"
   on public.bill_shares for insert
   to authenticated
-  with check (
-    exists (
-      select 1 from public.bills b
-      where b.id = bill_shares.bill_id and b.created_by = (select auth.uid())
-    )
-  );
+  with check (public.is_bill_payer(bill_id, (select auth.uid())));
 
 -- ============================================================================
 -- create_bill: insert a bill and all of its shares in ONE transaction.

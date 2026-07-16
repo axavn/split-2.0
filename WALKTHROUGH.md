@@ -110,6 +110,31 @@ database constraint is the enforcement.
   unused: they're the landing zone for the deferred receipt-OCR feature
   (spec §7.2), so adding it later needs no migration.
 
+### 3.6 A real bug we shipped: RLS infinite recursion
+
+The first version of these policies died at runtime with *"infinite recursion
+detected in policy for relation bill_shares"* — a bug worth studying because
+it's *the* classic RLS mistake:
+
+- the `bills` read-policy asked "does the viewer have a row in `bill_shares`?"
+- the `bill_shares` read-policy asked "is the viewer the payer in `bills`?"
+
+Postgres applies RLS to the subqueries *inside policies* too, so evaluating
+either policy triggered the other, forever. Neither policy is wrong on its
+own — the *pair* is.
+
+The standard fix (now in the schema): wrap each cross-table check in a
+`security definer` function (`is_bill_payer`, `is_bill_participant`).
+Such functions run as their owner, and table owners bypass RLS, so the lookup
+inside the function doesn't re-enter policy evaluation — cycle broken. The
+functions return only a boolean, so they don't become a data leak, and
+`execute` is granted only to `authenticated`.
+
+Takeaway: whenever two tables' policies need to reference each other, at
+least one side must go through a `security definer` helper (or a view with
+RLS disabled). If you see "infinite recursion detected in policy", look for a
+policy cycle.
+
 ## 4. Auth (`src/lib/auth.tsx`)
 
 ### 4.1 Username login on top of email auth
