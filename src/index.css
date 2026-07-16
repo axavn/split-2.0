@@ -24,7 +24,7 @@
   --text: #f4f4f2;        /* off-white, not pure #fff */
   --text-soft: #9a9aa2;   /* secondary text */
   --positive: #4ade80;    /* green: they owe you */
-  --negative: #f87171;    /* red: you owe them */
+  --negative: #da1e1e;    /* red: you owe them */
 
   --radius: 2px;          /* squared corners (journal item 6) */
 
